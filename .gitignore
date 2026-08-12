@@ -1,0 +1,8 @@
+# Cached curriculum pages — large, regenerable via `python3 -m imkh sync`
+data/cache/
+
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.DS_Store
