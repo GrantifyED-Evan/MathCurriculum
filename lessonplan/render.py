@@ -94,8 +94,6 @@ def markdown(plan: LessonPlan) -> str:
             ("Access supports", s.supports),
             ("Are you ready for more?", s.extension),
         ]
-        if s.label == "Cool-down" and not s.task:
-            sections.append(("Note", ["Cool-down text requires an accessim.org sign-in; use the printed or Blackline Master copy."]))
         for heading, items in sections:
             if items:
                 out += [f"**{heading}**", *_md_list(items), ""]
@@ -206,9 +204,6 @@ def html_fragment(plan: LessonPlan) -> str:
         ):
             if items:
                 h.append(f"<h3>{heading}</h3>{_ul(items)}")
-        if s.label == "Cool-down" and not s.task:
-            h.append("<p class='meta'>Cool-down text requires an accessim.org sign-in; use the printed or "
-                     "Blackline Master copy.</p>")
         h.append("</section>")
     if plan.summary:
         h.append("<h2>Student lesson summary</h2>" + _ul(plan.summary))

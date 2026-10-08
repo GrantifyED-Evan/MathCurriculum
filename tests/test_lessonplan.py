@@ -51,11 +51,20 @@ PREP_HTML = """<div class="layout__main"><h1>Naming the Moves</h1>
 <h2>Glossary</h2><h3>rotation</h3><p>A turn.</p></div>"""
 
 
-def make_plan(**timing):
-    lesson = parse.parse_lesson(LESSON_HTML)
+PRACTICE_HTML = """<div class="layout__main"><h1>Naming the Moves</h1><h2>Practice</h2>
+<h2>Problem 1</h2><h3>Student Task Statement</h3><p>Name the move.</p>
+<h2>Problem 2</h2><p>For Lesson 1: Moving in the Plane</p><h3>Student Task Statement</h3><p>Describe it.</p>
+<h2>Problem 3</h2><h3>Student Task Statement</h3><p>Draw the image.</p>
+<h2>Lesson 2 Resources</h2><p>ignored</p></div>"""
+
+
+def make_plan(html=LESSON_HTML, problems=None, **timing):
+    lesson = parse.parse_lesson(html)
     prep = parse.parse_preparation(PREP_HTML)
+    if problems is None:
+        problems = parse.parse_practice(PRACTICE_HTML)
     return plan.build(lesson, prep, ref=courses.parse_ref("8.1.2"), unit_title="Rigid Transformations",
-                      source_path="/6-8/grade-8/unit-1/section-a/lesson-2", **timing)
+                      source_path="/6-8/grade-8/unit-1/section-a/lesson-2", problems=problems, **timing)
 
 
 class TestRefs(unittest.TestCase):
@@ -115,67 +124,77 @@ class TestMath(unittest.TestCase):
         self.assertEqual(parse.flatten(html)[0].text, "Combine (2x + 1)")
 
 
+class TestPractice(unittest.TestCase):
+    def test_parse_practice(self):
+        problems = parse.parse_practice(PRACTICE_HTML)
+        self.assertEqual([(p.number, p.review_of) for p in problems], [(1, None), (2, 1), (3, None)])
+        self.assertEqual(problems[1].task, ["Describe it."])
+
+
 class TestPlan(unittest.TestCase):
-    def test_timeline(self):
+    def labels(self, p):
+        return [(s.label, s.minutes) for s in p.segments if not s.optional]
+
+    def test_block_structure(self):
+        # Opener 5 + activity 25 + practice cycles + closing; fixture fills 50 min.
         p = make_plan()
-        self.assertEqual([(s.start, s.end) for s in p.segments], [(0, 10), (10, 35), (35, 40), (40, 45)])
+        self.assertEqual(self.labels(p), [
+            ("Opener (Warm-up 2.1)", 5), ("Activity 2.2", 25),
+            ("Practice 1", 5), ("Practice 2", 5), ("Practice 3", 5), ("Closing Synthesis", 5),
+        ])
+        self.assertEqual(p.total, 50)
+        self.assertEqual(p.segments[0].adjustment, "Timeboxed to 5 min (curriculum lists 10).")
+
+    def test_practice_order_puts_current_lesson_first(self):
+        practice = [s for s in make_plan().segments if s.label.startswith("Practice")]
+        self.assertEqual([s.title for s in practice],
+                         ["Problem 1", "Problem 3", "Problem 2 (review of Lesson 1)"])
+
+    def test_activity_shortened_to_keep_two_practice_cycles(self):
+        p = make_plan(work_max=40)
+        self.assertEqual(self.labels(p), [
+            ("Opener (Warm-up 2.1)", 5), ("Activity 2.2", 20),
+            ("Practice 1", 5), ("Practice 2", 5), ("Closing Synthesis", 5),
+        ])
+        self.assertIn("Shortened from 25 to 20", p.segments[1].adjustment)
+        self.assertEqual(p.unused_practice, ["Problem 2 (review of Lesson 1)"])
+
+    def test_leftover_time_goes_to_closing(self):
+        p = make_plan(problems=parse.parse_practice(PRACTICE_HTML)[:1])
+        self.assertEqual(self.labels(p)[-1], ("Closing Synthesis", 10))
         self.assertEqual(p.total, 45)
-        self.assertTrue(p.segments[-1].suggested_time)
+
+    def test_closing_is_built_when_lesson_has_no_synthesis(self):
+        html = LESSON_HTML.replace("<h2>Lesson Synthesis</h2>", "<p>end</p>")
+        closing = make_plan(html=html).segments[-1]
+        self.assertEqual(closing.label, "Closing Synthesis")
+        self.assertIn("no Lesson Synthesis", closing.adjustment)
+
+    def test_optional_activity_fills_a_short_lesson(self):
+        html = LESSON_HTML.replace(
+            "<p>2.2</p><h2>Activity</h2><div>25 mins</div>",
+            "<p>2.2</p><h2>Activity</h2><p>Optional</p><div>25 mins</div>",
+        )
+        p = make_plan(html=html, problems=[])
+        self.assertEqual(self.labels(p), [("Opener (Warm-up 2.1)", 5), ("Activity 2.2", 25), ("Closing Synthesis", 10)])
+        self.assertEqual(p.segments[1].adjustment, "Optional activity included to fill the block.")
 
     def test_extraction(self):
-        warm, act, synth, _ = make_plan().segments
+        warm, act = make_plan().segments[:2]
         self.assertEqual(warm.grouping, "Partners")
         self.assertEqual(act.grouping, "Groups of 3")
         self.assertIn("The purpose of this Warm-up", warm.purpose)
         self.assertEqual(warm.questions, ["What did you notice?"])
         self.assertEqual(act.supports, ["Engagement: Chunk this task."])
         self.assertEqual(act.monitor, ["Monitor for groups who sort by type."])
-        self.assertEqual(synth.questions, ["What are the three moves called?"])
-
-    def test_within_productive_window(self):
-        # Fixture totals 45 min; default is a 50-min block with 40-50 productive.
-        notes = make_plan().timing_notes
-        self.assertIn("within the 40–50 productive min of a 50-min block", notes[0])
-        self.assertIn("leaving 5 min", notes[0])
-
-    def test_over_window_is_shortened_to_fit(self):
-        p = make_plan(work_max=42)
-        self.assertEqual(p.total, 42)
-        warm = p.segments[0]
-        self.assertEqual(warm.minutes, 7)
-        self.assertEqual(warm.adjustment, "Shortened from 10 to 7 min to fit the block.")
-        self.assertEqual([(s.start, s.end) for s in p.segments], [(0, 7), (7, 32), (32, 37), (37, 42)])
-
-    def test_under_window_lengthens_synthesis_then_adds_practice(self):
-        p = make_plan(work_min=48, work_max=50)
-        self.assertEqual(p.total, 48)
-        synth = next(s for s in p.segments if s.label == "Lesson Synthesis")
-        self.assertEqual(synth.minutes, 8)
-        p = make_plan(period=60, work_min=55, work_max=60)  # synthesis to 10, then 5 practice
-        self.assertEqual(p.total, 55)
-        self.assertEqual((p.segments[-2].label, p.segments[-2].minutes), ("Practice Problems", 5))
-        self.assertEqual(p.segments[-1].label, "Cool-down")
-
-    def test_optional_activity_is_off_the_clock(self):
-        html = LESSON_HTML.replace(
-            "<h2>Student Lesson Summary</h2>",
-            "<p>2.3</p><h2>Activity</h2><p>Optional</p><div>10 mins</div><h3>Extra Practice</h3>"
-            "<h2>Student Lesson Summary</h2>",
-        ).replace("<h2>Lesson Synthesis</h2>", "<p>end</p>")
-        lesson = parse.parse_lesson(html)
-        self.assertTrue(lesson.activities[2].optional)
-        p = plan.build(lesson, parse.parse_preparation(PREP_HTML), ref=courses.parse_ref("8.1.2"),
-                       unit_title="", source_path="/x")
-        self.assertEqual(p.total, 40)  # 10 + 25 + 5 cool-down; optional 10 excluded
-        self.assertIn("Optional Activity 2.3 (10 min) is not in the total: fits if time allows (50 min with it).", p.timing_notes[-2])
-        self.assertIn("| if time (10 min) | Activity 2.3 (optional) |", render.markdown(p))
+        self.assertEqual(make_plan().segments[-1].questions, ["What are the three moves called?"])
 
     def test_renderers(self):
-        p = make_plan()
-        md = render.markdown(p)
-        self.assertIn("| 0–10 (10 min) | Warm-up 2.1 |", md)
+        md = render.markdown(make_plan())
+        self.assertIn("| 0–5 (5 min) | Opener (Warm-up 2.1) |", md)
+        self.assertIn("| 45–50 (5 min) | Closing Synthesis |", md)
         self.assertIn("CC BY-NC", md)
-        self.assertIn("<h1>Lesson 2: Naming the Moves</h1>", render.html_page(p))
+        self.assertIn("<h1>Lesson 2: Naming the Moves</h1>", render.html_page(make_plan()))
 
 
 class TestCachedLesson(unittest.TestCase):

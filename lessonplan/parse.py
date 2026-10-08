@@ -488,3 +488,31 @@ def parse_lesson(html: str) -> Lesson:
         elif low == "student lesson summary":
             lesson.summary = _to_lines(body)
     return lesson
+
+
+# ---------------------------------------------------------------------------
+# Practice page
+# ---------------------------------------------------------------------------
+
+
+@dataclass
+class Problem:
+    number: int
+    review_of: int | None  # earlier lesson number for spiral-review problems
+    task: list[str] = field(default_factory=list)
+
+
+def parse_practice(html: str) -> list[Problem]:
+    """Practice problems from a lesson's public Practice page, in order."""
+    problems: list[Problem] = []
+    for heading, body in _sections(flatten(html), "h2"):
+        if heading.endswith("Resources"):
+            break
+        m = re.fullmatch(r"Problem (\d+)", heading)
+        if not m:
+            continue
+        review = next((re.match(r"^For\s*Lesson\s*(\d+)", b.text) for b in body
+                       if re.match(r"^For\s*Lesson", b.text)), None)
+        task_blocks = [b for b in body if b.kind != "h3" and not re.match(r"^For\s*Lesson", b.text)]
+        problems.append(Problem(int(m.group(1)), int(review.group(1)) if review else None, _to_lines(task_blocks)))
+    return problems

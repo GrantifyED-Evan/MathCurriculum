@@ -15,10 +15,17 @@ Each plan has:
   steps, student task, what to monitor for, responses to student struggles,
   discussion questions, synthesis moves, access supports
 - Every lesson fit to one block (default: 50 min with 40–50 min of productive
-  time). Over 50: the warm-up, then the longest activities, are shortened (never
-  below 5 min). Under 40: optional activities that fit are added, then the lesson
-  synthesis is lengthened (up to IM's 10 min), then practice-problem time is
-  added. Every change is labeled "Adjusted" in the plan
+  time), in this order:
+  1. **Opener** (5 min): the lesson's warm-up, timeboxed.
+  2. **Lesson**: the required activities at their listed times. The longest are
+     shortened (never below 5 min) only when needed to leave two practice cycles.
+  3. **Practice cycles** (5 min each): students do one problem from the lesson's
+     practice problems alone, then the teacher goes over it. Current-lesson
+     problems come first, then review problems; as many cycles as fit.
+  4. **Closing synthesis** (5–10 min): always last. Uses the lesson's synthesis,
+     or one built from its student targets when the lesson has none.
+  Optional activities are scheduled only when a lesson is otherwise too short.
+  Every change from the curriculum's listed times is labeled "Adjusted".
 - Links back to the source lesson and preparation pages
 
 ### Web app
