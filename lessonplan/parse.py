@@ -349,7 +349,7 @@ _MINUTES = re.compile(r"^(\d+)\s*mins?$")
 @dataclass
 class Activity:
     number: str
-    kind: str  # Warm-up, Activity, Optional Activity, ...
+    kind: str  # Warm-up, Activity, ...
     minutes: int | None
     title: str
     routines: list[str] = field(default_factory=list)
@@ -361,10 +361,11 @@ class Activity:
     student_thinking: list[str] = field(default_factory=list)
     extension: list[str] = field(default_factory=list)
     synthesis: list[str] = field(default_factory=list)
+    marked_optional: bool = False  # the site prints an "Optional" subtitle under the heading
 
     @property
     def optional(self) -> bool:
-        return "optional" in self.kind.lower() or "optional" in self.title.lower()
+        return self.marked_optional or "optional" in self.kind.lower()
 
 
 @dataclass
@@ -402,7 +403,8 @@ def _parse_activity(number: str, kind: str, body: list[Block]) -> Activity:
             rest = body[i + 1 :]
             break
         head.append(b)
-    act = Activity(number=number, kind=kind, minutes=minutes, title=title)
+    act = Activity(number=number, kind=kind, minutes=minutes, title=title,
+                   marked_optional=any(b.text == "Optional" for b in head))
 
     # Everything before the first known h3 card is the metadata area (h4 boxes).
     meta: list[Block] = []

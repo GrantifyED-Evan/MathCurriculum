@@ -16,6 +16,10 @@ def _time(seg: Segment) -> str:
     return f"{seg.minutes} min" + ("*" if seg.suggested_time else "")
 
 
+def _span(seg: Segment) -> str:
+    return "if time" if seg.optional else f"{seg.start}–{seg.end}"
+
+
 def _md_time(seg: Segment) -> str:
     return _time(seg).replace("*", "\\*")
 
@@ -66,14 +70,14 @@ def markdown(plan: LessonPlan) -> str:
     for s in plan.segments:
         label = s.label + (" (optional)" if s.optional else "")
         out.append(
-            f"| {s.start}–{s.end} ({_md_time(s)}) | {label} | {s.title} | {s.grouping} | {', '.join(s.routines)} |"
+            f"| {_span(s)} ({_md_time(s)}) | {label} | {s.title} | {s.grouping} | {', '.join(s.routines)} |"
         )
     out += [""]
     out += ["**Timing**", *_md_list(plan.timing_notes)]
     out += [""]
 
     for s in plan.segments:
-        out += [f"## {s.start}–{s.end} min · {s.label}" + (f": {s.title}" if s.title else "")]
+        out += [f"## {_span(s)}{'' if s.optional else ' min'} · {s.label}" + (f": {s.title}" if s.title else "")]
         meta = [p for p in (_md_time(s), s.grouping, ", ".join(s.routines)) if p]
         out += [f"*{' · '.join(meta)}*", ""]
         if s.purpose:
@@ -174,14 +178,14 @@ def html_fragment(plan: LessonPlan) -> str:
              "<th>Title</th><th>Grouping</th><th>Routines</th></tr>")
     for s in plan.segments:
         label = s.label + (" (optional)" if s.optional else "")
-        h.append(f"<tr><td>{s.start}–{s.end}<br><span class='meta'>{_time(s)}</span></td><td>{_e(label)}</td>"
+        h.append(f"<tr><td>{_span(s)}<br><span class='meta'>{_time(s)}</span></td><td>{_e(label)}</td>"
                  f"<td>{_e(s.title)}</td><td>{_e(s.grouping)}</td><td>{_e(', '.join(s.routines))}</td></tr>")
     h.append("</table>")
     h += [f"<div class='note'>{_e(n)}</div>" for n in plan.timing_notes]
 
     for s in plan.segments:
         h.append("<section class='seg'>")
-        h.append(f"<h2>{s.start}–{s.end} min · {_e(s.label)}{': ' + _e(s.title) if s.title else ''}</h2>")
+        h.append(f"<h2>{_span(s)}{'' if s.optional else ' min'} · {_e(s.label)}{': ' + _e(s.title) if s.title else ''}</h2>")
         chips = [_time(s)] + ([s.grouping] if s.grouping else []) + s.routines + (["optional"] if s.optional else [])
         h.append("<div>" + "".join(f"<span class='chip'>{_e(c)}</span>" for c in chips) + "</div>")
         if s.purpose:

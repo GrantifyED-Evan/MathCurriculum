@@ -147,6 +147,20 @@ class TestPlan(unittest.TestCase):
         notes = make_plan(work_min=48, work_max=50).timing_notes
         self.assertIn("3 min under", notes[0])
 
+    def test_optional_activity_is_off_the_clock(self):
+        html = LESSON_HTML.replace(
+            "<h2>Student Lesson Summary</h2>",
+            "<p>2.3</p><h2>Activity</h2><p>Optional</p><div>10 mins</div><h3>Extra Practice</h3>"
+            "<h2>Student Lesson Summary</h2>",
+        ).replace("<h2>Lesson Synthesis</h2>", "<p>end</p>")
+        lesson = parse.parse_lesson(html)
+        self.assertTrue(lesson.activities[2].optional)
+        p = plan.build(lesson, parse.parse_preparation(PREP_HTML), ref=courses.parse_ref("8.1.2"),
+                       unit_title="", source_path="/x")
+        self.assertEqual(p.total, 40)  # 10 + 25 + 5 cool-down; optional 10 excluded
+        self.assertIn("Optional Activity 2.3 (10 min) is not in the total: does not fit", p.timing_notes[-2])
+        self.assertIn("| if time (10 min) | Activity 2.3 (optional) |", render.markdown(p))
+
     def test_renderers(self):
         p = make_plan()
         md = render.markdown(p)

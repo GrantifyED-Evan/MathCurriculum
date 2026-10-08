@@ -197,9 +197,11 @@ def build(lesson: parse.Lesson, prep: parse.Preparation, *, ref: courses.Ref, un
         minutes = act.minutes or 0
         launch, launch_supports = split_supports(act.launch)
         synthesis, synth_supports = split_supports(act.synthesis)
+        # Optional activities stay in the plan but are not on the clock: the
+        # agenda and total cover required work only.
         seg = Segment(
             start=clock,
-            end=clock + minutes,
+            end=clock if act.optional else clock + minutes,
             minutes=minutes,
             label=f"{act.kind} {act.number}",
             title=act.title,
@@ -219,7 +221,7 @@ def build(lesson: parse.Lesson, prep: parse.Preparation, *, ref: courses.Ref, un
             extension=act.extension,
         )
         plan.segments.append(seg)
-        clock += minutes
+        clock = seg.end
 
     if lesson.lesson_synthesis:
         steps, supports = split_supports(lesson.lesson_synthesis)
@@ -264,7 +266,7 @@ def _timing_notes(plan: LessonPlan) -> list[str]:
     if plan.total > plan.work_max:
         need = plan.total - plan.work_max
         notes.append(f"Planned time is {plan.total} min: {need} min over the {window}. Cut at least {need} min:")
-        options = [(f"Skip optional {s.label}", s.minutes) for s in plan.segments if s.optional]
+        options = []
         warm = next((s for s in plan.segments if s.label.lower().startswith("warm")), None)
         if warm and warm.minutes > 5:
             options.append(("Trim the warm-up to 5 min", warm.minutes - 5))
@@ -289,6 +291,13 @@ def _timing_notes(plan: LessonPlan) -> list[str]:
         notes.append(
             f"Planned time is {plan.total} min: within the {window}, "
             f"leaving {plan.period - plan.total} min for entry, transitions, and dismissal."
+        )
+    for seg in (s for s in plan.segments if s.optional):
+        with_it = plan.total + seg.minutes
+        notes.append(
+            f"Optional {seg.label} ({seg.minutes} min) is not in the total: "
+            + ("fits if time allows" if with_it <= plan.work_max else "does not fit; skip or use on another day")
+            + f" ({with_it} min with it)."
         )
     if any(s.suggested_time for s in plan.segments):
         notes.append("Times marked * are suggested (IM course guide: synthesis 5–10 min, cool-down about 5 min).")
