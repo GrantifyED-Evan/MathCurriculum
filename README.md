@@ -40,7 +40,7 @@ python3 -m lessonplan unit 8.1 --out plans/grade8       # every lesson in a unit
 python3 -m lessonplan course grade8 --out plans/grade8  # every lesson in a course
 ```
 
-Ready-made Markdown plans for all Grade 8 lessons are in `plans/grade8/`.
+Ready-made plans for Grade 8 Unit 1 (17 lessons) are in `plans/grade8/unit-1/`, including one printable HTML file with all 17.
 
 ### Limits
 
