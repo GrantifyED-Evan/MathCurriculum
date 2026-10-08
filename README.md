@@ -1,3 +1,55 @@
+# In-class lesson planner
+
+`lessonplan/` builds a minute-by-minute **in-class plan for every lesson** of the
+IM curriculum on [accessim.org](https://accessim.org/6-8/grade-8?a=teacher)
+(Grades 6–8, Accelerated 6–7, Algebra 1, Geometry, Algebra 2). Python 3.10+
+standard library only.
+
+Each plan has:
+
+- Student goal, learning goals, student targets, standards
+- Before-class checklist: materials, copies, required preparation
+- Vocabulary for the lesson
+- Agenda table with start/end minutes, grouping, and instructional routines
+- Per block (warm-up, activities, lesson synthesis, cool-down): purpose, launch
+  steps, student task, what to monitor for, responses to student struggles,
+  discussion questions, synthesis moves, access supports
+- Timing check against your class period (default 45 min), with what to cut
+  when the lesson runs over
+- Links back to the source lesson and preparation pages
+
+### Web app
+
+```bash
+python3 -m lessonplan serve        # open http://127.0.0.1:8000
+```
+
+Pick a course → unit → lesson. Set the class period length, print a plan,
+download it as Markdown, or open "All plans for this unit" to print a unit.
+
+### Command line
+
+```bash
+python3 -m lessonplan list grade8                       # units
+python3 -m lessonplan list 8.1                          # lessons in a unit
+python3 -m lessonplan plan 8.1.2                        # one plan to stdout
+python3 -m lessonplan plan 8.1.2 --period 50 --format html --out plans
+python3 -m lessonplan unit 8.1 --out plans/grade8       # every lesson in a unit
+python3 -m lessonplan course grade8 --out plans/grade8  # every lesson in a course
+```
+
+Ready-made Markdown plans for all Grade 8 lessons are in `plans/grade8/`.
+
+### Limits
+
+- Cool-down text, student responses, and assessments need an accessim.org
+  sign-in; plans note this instead of fetching them.
+- accessim.org does not print durations for the lesson synthesis or cool-down;
+  plans use 5 min each and mark them with `*`.
+- Diagrams appear as their alt text.
+- Content is © Illustrative Mathematics, CC BY-NC 4.0; every plan carries that
+  attribution.
+
 # Kendall Hunt curriculum agent
 
 A Claude Code agent, plus the toolkit behind it, for reading the
