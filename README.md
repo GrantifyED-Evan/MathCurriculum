@@ -14,8 +14,9 @@ Each plan has:
 - Per block (warm-up, activities, lesson synthesis, cool-down): purpose, launch
   steps, student task, what to monitor for, responses to student struggles,
   discussion questions, synthesis moves, access supports
-- Timing check against your class period (default 45 min), with what to cut
-  when the lesson runs over
+- Timing check against your schedule (default: 50-min blocks with 40–48 min of
+  productive time), with what to cut when a lesson runs over 48 min and what to
+  add when it falls under 40
 - Links back to the source lesson and preparation pages
 
 ### Web app
@@ -24,7 +25,7 @@ Each plan has:
 python3 -m lessonplan serve        # open http://127.0.0.1:8000
 ```
 
-Pick a course → unit → lesson. Set the class period length, print a plan,
+Pick a course → unit → lesson. Set the block length and productive-time range, print a plan,
 download it as Markdown, or open "All plans for this unit" to print a unit.
 
 ### Command line
@@ -33,7 +34,8 @@ download it as Markdown, or open "All plans for this unit" to print a unit.
 python3 -m lessonplan list grade8                       # units
 python3 -m lessonplan list 8.1                          # lessons in a unit
 python3 -m lessonplan plan 8.1.2                        # one plan to stdout
-python3 -m lessonplan plan 8.1.2 --period 50 --format html --out plans
+python3 -m lessonplan plan 8.1.2 --format html --out plans
+python3 -m lessonplan plan 8.1.2 --period 55 --work-min 45 --work-max 52  # other schedules
 python3 -m lessonplan unit 8.1 --out plans/grade8       # every lesson in a unit
 python3 -m lessonplan course grade8 --out plans/grade8  # every lesson in a course
 ```

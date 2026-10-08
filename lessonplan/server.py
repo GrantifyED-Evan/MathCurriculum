@@ -15,19 +15,30 @@ from . import courses, plan, render
 e = html.escape
 
 
-def _period(query: dict) -> int:
-    try:
-        return max(20, min(120, int(query.get("period", [plan.DEFAULT_PERIOD])[0])))
-    except ValueError:
-        return plan.DEFAULT_PERIOD
+_TIMING_FIELDS = (("period", "Block", plan.DEFAULT_PERIOD), ("work_min", "Productive", plan.DEFAULT_WORK_MIN),
+                  ("work_max", "to", plan.DEFAULT_WORK_MAX))
 
 
-def _period_form(action: str, period: int) -> str:
-    return (
-        f"<form class='inline' method='get' action='{e(action)}'>Class period "
-        f"<input type='number' name='period' min='20' max='120' value='{period}' style='width:5em'> min "
-        "<button>Update</button></form>"
+def _timing(query: dict) -> dict:
+    out = {}
+    for key, _, default in _TIMING_FIELDS:
+        try:
+            out[key] = max(10, min(180, int(query.get(key, [default])[0])))
+        except ValueError:
+            out[key] = default
+    return out
+
+
+def _qs(timing: dict) -> str:
+    return "?" + urllib.parse.urlencode(timing)
+
+
+def _timing_form(action: str, timing: dict) -> str:
+    inputs = "".join(
+        f"{label} <input type='number' name='{key}' min='10' max='180' value='{timing[key]}' style='width:4.5em'> "
+        for key, label, _ in _TIMING_FIELDS
     )
+    return f"<form class='inline' method='get' action='{e(action)}'>{inputs}min <button>Update</button></form>"
 
 
 def home(_: dict) -> str:
@@ -58,18 +69,18 @@ def course_page(slug: str, _: dict) -> str:
 def unit_page(slug: str, unit: int, query: dict) -> str:
     course = courses.resolve_course(slug)
     info = courses.unit_info(course, unit)
-    period = _period(query)
+    timing = _timing(query)
     short = course.slug.removeprefix("grade")
     rows = "".join(
-        f"<tr><td>{l['number']}</td><td><a href='/plan/{short}.{unit}.{l['number']}?period={period}'>"
+        f"<tr><td>{l['number']}</td><td><a href='/plan/{short}.{unit}.{l['number']}{_qs(timing)}'>"
         f"{e(l['title'])}</a></td><td class='meta'>{e(l['goal'])}</td></tr>"
         for l in info["lessons"]
     )
     body = (
         f"<div class='nav'><a href='/'>All courses</a><a href='/c/{course.slug}'>{e(course.name)}</a></div>"
         f"<h1>Unit {unit}: {e(info['title'])}</h1>"
-        f"<p>{_period_form(f'/c/{course.slug}/{unit}', period)} · "
-        f"<a href='/c/{course.slug}/{unit}/all?period={period}'>All plans for this unit (print)</a></p>"
+        f"<p>{_timing_form(f'/c/{course.slug}/{unit}', timing)} · "
+        f"<a href='/c/{course.slug}/{unit}/all{_qs(timing)}'>All plans for this unit (print)</a></p>"
         f"<table><tr><th>#</th><th>Lesson</th><th>Student goal</th></tr>{rows}</table>"
     )
     return render.page(f"{course.name} Unit {unit}", body)
@@ -78,28 +89,28 @@ def unit_page(slug: str, unit: int, query: dict) -> str:
 def unit_all_page(slug: str, unit: int, query: dict) -> str:
     course = courses.resolve_course(slug)
     info = courses.unit_info(course, unit)
-    period = _period(query)
+    timing = _timing(query)
     short = course.slug.removeprefix("grade")
     parts = [
-        f"<div class='nav'><a href='/c/{course.slug}/{unit}?period={period}'>Back to unit</a>"
+        f"<div class='nav'><a href='/c/{course.slug}/{unit}{_qs(timing)}'>Back to unit</a>"
         "<a href='javascript:window.print()'>Print</a></div>"
     ]
     for lesson in info["lessons"]:
-        p = plan.make(f"{short}.{unit}.{lesson['number']}", period=period)
+        p = plan.make(f"{short}.{unit}.{lesson['number']}", **timing)
         parts.append(render.html_fragment(p))
     return render.page(f"{course.name} Unit {unit} plans", "".join(parts))
 
 
 def plan_page(ref_text: str, query: dict) -> str:
-    period = _period(query)
-    p = plan.make(ref_text, period=period)
+    timing = _timing(query)
+    p = plan.make(ref_text, **timing)
     ref = courses.parse_ref(ref_text)
     nav = (
         f"<div class='nav'><a href='/'>All courses</a><a href='/c/{ref.course.slug}'>{e(ref.course.name)}</a>"
-        f"<a href='/c/{ref.course.slug}/{ref.unit}?period={period}'>Unit {ref.unit}</a>"
-        f"<a href='/plan/{e(p.ref)}.md?period={period}'>Download Markdown</a>"
+        f"<a href='/c/{ref.course.slug}/{ref.unit}{_qs(timing)}'>Unit {ref.unit}</a>"
+        f"<a href='/plan/{e(p.ref)}.md{_qs(timing)}'>Download Markdown</a>"
         "<a href='javascript:window.print()'>Print</a></div>"
-        f"<p>{_period_form(f'/plan/{p.ref}', period)}</p>"
+        f"<p>{_timing_form(f'/plan/{p.ref}', timing)}</p>"
     )
     return render.page(f"{p.ref} {p.title}", nav + render.html_fragment(p))
 
@@ -117,7 +128,7 @@ class Handler(BaseHTTPRequestHandler):
                 self.send_header("Location", f"/plan/{query['ref'][0].strip()}")
                 self.end_headers()
             elif parts[0] == "plan" and len(parts) == 2 and parts[1].endswith(".md"):
-                p = plan.make(parts[1][:-3], period=_period(query))
+                p = plan.make(parts[1][:-3], **_timing(query))
                 self._send(render.markdown(p), "text/markdown; charset=utf-8",
                            {"Content-Disposition": f"attachment; filename=\"{p.ref}.md\""})
             elif parts[0] == "plan" and len(parts) == 2:

@@ -16,9 +16,13 @@ from . import courses, fetch, parse
 
 # Lesson pages do not print synthesis or cool-down durations. The course guide
 # ("An IM Lesson") says the synthesis takes 5-10 minutes and the cool-down about
-# 5, so plans use the low end and mark those times as suggested. The class period
-# is a setting; 45 minutes is only the default.
-DEFAULT_PERIOD = 45
+# 5, so plans use the low end and mark those times as suggested.
+#
+# Default schedule: 50-minute blocks with 40-48 minutes of productive
+# (instructional) time; the rest goes to entry, transitions, and dismissal.
+DEFAULT_PERIOD = 50
+DEFAULT_WORK_MIN = 40
+DEFAULT_WORK_MAX = 48
 SYNTHESIS_MINUTES = 5
 COOLDOWN_MINUTES = 5
 
@@ -68,6 +72,8 @@ class LessonPlan:
     source_url: str
     prep_url: str
     period: int
+    work_min: int
+    work_max: int
     student_goal: str = ""
     learning_goals: list[str] = field(default_factory=list)
     targets: list[str] = field(default_factory=list)
@@ -151,7 +157,8 @@ def split_supports(lines: list[str]) -> tuple[list[str], list[str]]:
 
 
 def build(lesson: parse.Lesson, prep: parse.Preparation, *, ref: courses.Ref, unit_title: str,
-          source_path: str, period: int = DEFAULT_PERIOD) -> LessonPlan:
+          source_path: str, period: int = DEFAULT_PERIOD, work_min: int = DEFAULT_WORK_MIN,
+          work_max: int = DEFAULT_WORK_MAX) -> LessonPlan:
     plan = LessonPlan(
         ref=str(ref),
         course=ref.course.name,
@@ -162,6 +169,8 @@ def build(lesson: parse.Lesson, prep: parse.Preparation, *, ref: courses.Ref, un
         source_url=fetch.url_for(source_path),
         prep_url=fetch.url_for(source_path + "/preparation"),
         period=period,
+        work_min=min(work_min, work_max, period),
+        work_max=min(work_max, period),
         student_goal=prep.student_goal,
         learning_goals=prep.learning_goals,
         targets=prep.student_targets,
@@ -251,29 +260,43 @@ def build(lesson: parse.Lesson, prep: parse.Preparation, *, ref: courses.Ref, un
 
 def _timing_notes(plan: LessonPlan) -> list[str]:
     notes = []
-    diff = plan.total - plan.period
-    if diff > 0:
-        notes.append(f"Planned time is {plan.total} min, {diff} min over a {plan.period}-min period.")
-        optional = [s for s in plan.segments if s.optional]
-        if optional:
-            notes.append("Skip optional: " + ", ".join(f"{s.label} ({s.minutes} min)" for s in optional) + ".")
+    window = f"{plan.work_min}–{plan.work_max} productive min of a {plan.period}-min block"
+    if plan.total > plan.work_max:
+        need = plan.total - plan.work_max
+        notes.append(f"Planned time is {plan.total} min: {need} min over the {window}. Cut at least {need} min:")
+        options = [(f"Skip optional {s.label}", s.minutes) for s in plan.segments if s.optional]
         warm = next((s for s in plan.segments if s.label.lower().startswith("warm")), None)
         if warm and warm.minutes > 5:
-            notes.append(f"Or trim the warm-up to 5 min (saves {warm.minutes - 5}).")
-        notes.append("Or move the cool-down to the start of the next class.")
-    elif diff < 0:
-        notes.append(
-            f"Planned time is {plan.total} min; {-diff} min of buffer in a {plan.period}-min period "
-            "for transitions, extensions, or practice problems."
-        )
+            options.append(("Trim the warm-up to 5 min", warm.minutes - 5))
+        cooldown = next((s for s in plan.segments if s.label == "Cool-down"), None)
+        if cooldown:
+            options.append(("Give the cool-down at the start of the next class", cooldown.minutes))
+        saved = 0
+        for text, minutes in options:
+            saved += minutes
+            notes.append(f"{text} (saves {minutes}; {saved} total).")
+        if saved < need:
+            notes.append(f"Still {need - saved} min over: split the lesson across two days.")
+    elif plan.total < plan.work_min:
+        short = plan.work_min - plan.total
+        notes.append(f"Planned time is {plan.total} min: {short} min under the {window}. Add at least {short} min:")
+        if any(s.label == "Lesson Synthesis" for s in plan.segments):
+            notes.append("Extend the lesson synthesis to 10 min (IM range 5–10; adds 5).")
+        if any(s.extension for s in plan.segments):
+            notes.append("Use the “Are you ready for more?” extensions.")
+        notes.append("Start the practice problems in class.")
     else:
-        notes.append(f"Planned time fills the {plan.period}-min period exactly.")
+        notes.append(
+            f"Planned time is {plan.total} min: within the {window}, "
+            f"leaving {plan.period - plan.total} min for entry, transitions, and dismissal."
+        )
     if any(s.suggested_time for s in plan.segments):
         notes.append("Times marked * are suggested (IM course guide: synthesis 5–10 min, cool-down about 5 min).")
     return notes
 
 
-def make(ref_text: str, *, period: int = DEFAULT_PERIOD, refresh: bool = False) -> LessonPlan:
+def make(ref_text: str, *, period: int = DEFAULT_PERIOD, work_min: int = DEFAULT_WORK_MIN,
+         work_max: int = DEFAULT_WORK_MAX, refresh: bool = False) -> LessonPlan:
     ref = courses.parse_ref(ref_text)
     if ref.lesson is None:
         raise ValueError(f"{ref_text!r} names a unit; give a lesson, e.g. {ref}.1")
@@ -283,4 +306,5 @@ def make(ref_text: str, *, period: int = DEFAULT_PERIOD, refresh: bool = False) 
         raise ValueError(f"{ref.course.name} Unit {ref.unit} has no Lesson {ref.lesson}")
     lesson = parse.parse_lesson(fetch.fetch(match["path"], refresh=refresh))
     prep = parse.parse_preparation(fetch.fetch(match["path"] + "/preparation", refresh=refresh))
-    return build(lesson, prep, ref=ref, unit_title=info["title"], source_path=match["path"], period=period)
+    return build(lesson, prep, ref=ref, unit_title=info["title"], source_path=match["path"],
+                 period=period, work_min=work_min, work_max=work_max)

@@ -19,8 +19,12 @@ def _write(p: plan.LessonPlan, out: Path, fmt: str) -> Path:
     return path
 
 
+def _timing(args) -> dict:
+    return {"period": args.period, "work_min": args.work_min, "work_max": args.work_max, "refresh": args.refresh}
+
+
 def cmd_plan(args) -> int:
-    p = plan.make(args.ref, period=args.period, refresh=args.refresh)
+    p = plan.make(args.ref, **_timing(args))
     if args.out:
         print(_write(p, Path(args.out), args.format))
     else:
@@ -32,7 +36,7 @@ def _batch(refs: list[str], args) -> int:
     failures = 0
     for ref in refs:
         try:
-            path = _write(plan.make(ref, period=args.period, refresh=args.refresh), Path(args.out), args.format)
+            path = _write(plan.make(ref, **_timing(args)), Path(args.out), args.format)
             print(path)
         except Exception as exc:  # keep going; report at the end
             failures += 1
@@ -88,7 +92,12 @@ def main(argv: list[str] | None = None) -> int:
     sub = parser.add_subparsers(dest="command", required=True)
 
     def common(p):
-        p.add_argument("--period", type=int, default=plan.DEFAULT_PERIOD, help="class period in minutes (default 45)")
+        p.add_argument("--period", type=int, default=plan.DEFAULT_PERIOD,
+                       help=f"class block in minutes (default {plan.DEFAULT_PERIOD})")
+        p.add_argument("--work-min", type=int, default=plan.DEFAULT_WORK_MIN,
+                       help=f"minimum productive minutes (default {plan.DEFAULT_WORK_MIN})")
+        p.add_argument("--work-max", type=int, default=plan.DEFAULT_WORK_MAX,
+                       help=f"maximum productive minutes (default {plan.DEFAULT_WORK_MAX})")
         p.add_argument("--format", choices=["md", "html"], default="md")
         p.add_argument("--refresh", action="store_true", help="re-download instead of using the cache")
 

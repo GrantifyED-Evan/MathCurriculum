@@ -58,7 +58,7 @@ def markdown(plan: LessonPlan) -> str:
         out += [""]
 
     out += [
-        f"## Agenda ({plan.total} of {plan.period} min)",
+        f"## Agenda ({plan.total} productive min · target {plan.work_min}–{plan.work_max} of {plan.period})",
         "",
         "| Time | Block | Title | Grouping | Routines |",
         "| --- | --- | --- | --- | --- |",
@@ -69,7 +69,7 @@ def markdown(plan: LessonPlan) -> str:
             f"| {s.start}–{s.end} ({_md_time(s)}) | {label} | {s.title} | {s.grouping} | {', '.join(s.routines)} |"
         )
     out += [""]
-    out += [f"> {n}" for n in plan.timing_notes]
+    out += ["**Timing**", *_md_list(plan.timing_notes)]
     out += [""]
 
     for s in plan.segments:
@@ -170,7 +170,7 @@ def html_fragment(plan: LessonPlan) -> str:
         h.append("<h2>Vocabulary</h2><ul>" + "".join(
             f"<li><b>{_e(t)}</b> — {_e(d)}</li>" for t, d in plan.vocabulary) + "</ul>")
 
-    h.append(f"<h2>Agenda · {plan.total} of {plan.period} min</h2><table><tr><th>Time</th><th>Block</th>"
+    h.append(f"<h2>Agenda · {plan.total} productive min · target {plan.work_min}–{plan.work_max} of {plan.period}</h2><table><tr><th>Time</th><th>Block</th>"
              "<th>Title</th><th>Grouping</th><th>Routines</th></tr>")
     for s in plan.segments:
         label = s.label + (" (optional)" if s.optional else "")

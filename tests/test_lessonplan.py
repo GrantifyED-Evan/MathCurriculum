@@ -51,11 +51,11 @@ PREP_HTML = """<div class="layout__main"><h1>Naming the Moves</h1>
 <h2>Glossary</h2><h3>rotation</h3><p>A turn.</p></div>"""
 
 
-def make_plan(period=45):
+def make_plan(**timing):
     lesson = parse.parse_lesson(LESSON_HTML)
     prep = parse.parse_preparation(PREP_HTML)
     return plan.build(lesson, prep, ref=courses.parse_ref("8.1.2"), unit_title="Rigid Transformations",
-                      source_path="/6-8/grade-8/unit-1/section-a/lesson-2", period=period)
+                      source_path="/6-8/grade-8/unit-1/section-a/lesson-2", **timing)
 
 
 class TestRefs(unittest.TestCase):
@@ -132,9 +132,20 @@ class TestPlan(unittest.TestCase):
         self.assertEqual(act.monitor, ["Monitor for groups who sort by type."])
         self.assertEqual(synth.questions, ["What are the three moves called?"])
 
-    def test_over_time_note(self):
-        notes = make_plan(period=40).timing_notes
-        self.assertIn("5 min over", notes[0])
+    def test_within_productive_window(self):
+        # Fixture totals 45 min; default is a 50-min block with 40-48 productive.
+        notes = make_plan().timing_notes
+        self.assertIn("within the 40–48 productive min of a 50-min block", notes[0])
+        self.assertIn("leaving 5 min", notes[0])
+
+    def test_over_productive_window(self):
+        notes = make_plan(work_max=42).timing_notes
+        self.assertIn("3 min over", notes[0])
+        self.assertIn("Trim the warm-up to 5 min (saves 5; 5 total).", notes)
+
+    def test_under_productive_window(self):
+        notes = make_plan(work_min=48, work_max=50).timing_notes
+        self.assertIn("3 min under", notes[0])
 
     def test_renderers(self):
         p = make_plan()
