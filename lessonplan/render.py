@@ -80,6 +80,8 @@ def markdown(plan: LessonPlan) -> str:
         out += [f"## {_span(s)}{'' if s.optional else ' min'} · {s.label}" + (f": {s.title}" if s.title else "")]
         meta = [p for p in (_md_time(s), s.grouping, ", ".join(s.routines)) if p]
         out += [f"*{' · '.join(meta)}*", ""]
+        if s.adjustment:
+            out += [f"**Adjusted:** {s.adjustment}", ""]
         if s.purpose:
             out += [f"**Purpose:** {s.purpose}", ""]
         sections = [
@@ -188,6 +190,8 @@ def html_fragment(plan: LessonPlan) -> str:
         h.append(f"<h2>{_span(s)}{'' if s.optional else ' min'} · {_e(s.label)}{': ' + _e(s.title) if s.title else ''}</h2>")
         chips = [_time(s)] + ([s.grouping] if s.grouping else []) + s.routines + (["optional"] if s.optional else [])
         h.append("<div>" + "".join(f"<span class='chip'>{_e(c)}</span>" for c in chips) + "</div>")
+        if s.adjustment:
+            h.append(f"<p class='note'><b>Adjusted:</b> {_e(s.adjustment)}</p>")
         if s.purpose:
             h.append(f"<p><b>Purpose:</b> {_e(s.purpose)}</p>")
         for heading, items in (

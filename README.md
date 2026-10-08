@@ -14,9 +14,11 @@ Each plan has:
 - Per block (warm-up, activities, lesson synthesis, cool-down): purpose, launch
   steps, student task, what to monitor for, responses to student struggles,
   discussion questions, synthesis moves, access supports
-- Timing check against your schedule (default: 50-min blocks with 40–48 min of
-  productive time), with what to cut when a lesson runs over 48 min and what to
-  add when it falls under 40
+- Every lesson fit to one block (default: 50 min with 40–50 min of productive
+  time). Over 50: the warm-up, then the longest activities, are shortened (never
+  below 5 min). Under 40: optional activities that fit are added, then the lesson
+  synthesis is lengthened (up to IM's 10 min), then practice-problem time is
+  added. Every change is labeled "Adjusted" in the plan
 - Links back to the source lesson and preparation pages
 
 ### Web app
@@ -35,7 +37,7 @@ python3 -m lessonplan list grade8                       # units
 python3 -m lessonplan list 8.1                          # lessons in a unit
 python3 -m lessonplan plan 8.1.2                        # one plan to stdout
 python3 -m lessonplan plan 8.1.2 --format html --out plans
-python3 -m lessonplan plan 8.1.2 --period 55 --work-min 45 --work-max 52  # other schedules
+python3 -m lessonplan plan 8.1.2 --period 55 --work-min 45 --work-max 55  # other schedules
 python3 -m lessonplan unit 8.1 --out plans/grade8       # every lesson in a unit
 python3 -m lessonplan course grade8 --out plans/grade8  # every lesson in a course
 ```

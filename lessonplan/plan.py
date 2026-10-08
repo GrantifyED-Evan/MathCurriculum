@@ -18,11 +18,13 @@ from . import courses, fetch, parse
 # ("An IM Lesson") says the synthesis takes 5-10 minutes and the cool-down about
 # 5, so plans use the low end and mark those times as suggested.
 #
-# Default schedule: 50-minute blocks with 40-48 minutes of productive
-# (instructional) time; the rest goes to entry, transitions, and dismissal.
+# Default schedule: every lesson fits one 50-minute block with 40-50 minutes
+# of productive (instructional) time; the rest goes to entry, transitions,
+# and dismissal. Lessons outside the window are adjusted to fit (see _fit).
 DEFAULT_PERIOD = 50
 DEFAULT_WORK_MIN = 40
-DEFAULT_WORK_MAX = 48
+DEFAULT_WORK_MAX = 50
+MIN_ACTIVITY_MINUTES = 5
 SYNTHESIS_MINUTES = 5
 COOLDOWN_MINUTES = 5
 
@@ -59,6 +61,7 @@ class Segment:
     synthesis: list[str] = field(default_factory=list)
     supports: list[str] = field(default_factory=list)
     extension: list[str] = field(default_factory=list)
+    adjustment: str = ""  # how the planner changed this block to fit the window
 
 
 @dataclass
@@ -71,6 +74,7 @@ class LessonPlan:
     title: str
     source_url: str
     prep_url: str
+    practice_url: str
     period: int
     work_min: int
     work_max: int
@@ -168,6 +172,7 @@ def build(lesson: parse.Lesson, prep: parse.Preparation, *, ref: courses.Ref, un
         title=lesson.title or prep.title,
         source_url=fetch.url_for(source_path),
         prep_url=fetch.url_for(source_path + "/preparation"),
+        practice_url=fetch.url_for(source_path + "/practice"),
         period=period,
         work_min=min(work_min, work_max, period),
         work_max=min(work_max, period),
@@ -254,44 +259,84 @@ def build(lesson: parse.Lesson, prep: parse.Preparation, *, ref: courses.Ref, un
             task=lesson.cooldown,
         )
     )
-    clock += cd_minutes
-    plan.total = clock
+    _fit(plan)
     plan.timing_notes = _timing_notes(plan)
     return plan
+
+
+def _retime(plan: LessonPlan) -> None:
+    clock = 0
+    for seg in plan.segments:
+        seg.start = clock
+        if not seg.optional:
+            clock += seg.minutes
+        seg.end = clock
+    plan.total = clock
+
+
+def _fit(plan: LessonPlan) -> None:
+    """Adjust the lesson so its productive time lands in [work_min, work_max].
+
+    Under the window: bring in optional activities that fit, then lengthen the
+    lesson synthesis toward IM's 10-minute upper bound, then add practice-problem
+    time before the cool-down. Over the window: shorten the warm-up, then the
+    longest activities, never below MIN_ACTIVITY_MINUTES.
+    """
+    _retime(plan)
+    lo, hi = plan.work_min, plan.work_max
+
+    for seg in [s for s in plan.segments if s.optional]:
+        if plan.total >= lo:
+            break
+        if plan.total + seg.minutes <= hi:
+            seg.optional = False
+            seg.adjustment = "Optional activity included to fill the block."
+            _retime(plan)
+
+    synth = next((s for s in plan.segments if s.label == "Lesson Synthesis"), None)
+    if synth and plan.total < lo and synth.minutes < 10:
+        add = min(10 - synth.minutes, lo - plan.total)
+        synth.adjustment = f"Lengthened from {synth.minutes} to {synth.minutes + add} min to fill the block."
+        synth.minutes += add
+        _retime(plan)
+
+    if plan.total < lo:
+        add = lo - plan.total
+        practice = Segment(
+            start=0, end=0, minutes=add, label="Practice Problems", grouping="Individual or partners",
+            purpose="Start the lesson's practice problems in class (see the lesson's Practice page).",
+            task=[f"Practice problems: {plan.practice_url}"],
+            adjustment=f"Added {add} min to reach the {lo}-min minimum.",
+        )
+        plan.segments.insert(len(plan.segments) - 1, practice)
+        _retime(plan)
+
+    if plan.total > hi:
+        work = [s for s in plan.segments if not s.optional and s.label not in ("Lesson Synthesis", "Cool-down")]
+        warm = [s for s in work if s.label.lower().startswith("warm")]
+        rest = sorted((s for s in work if s not in warm), key=lambda s: -s.minutes)
+        for seg in warm + rest:
+            over = plan.total - hi
+            if over <= 0:
+                break
+            cut = min(over, seg.minutes - MIN_ACTIVITY_MINUTES)
+            if cut > 0:
+                seg.adjustment = f"Shortened from {seg.minutes} to {seg.minutes - cut} min to fit the block."
+                seg.minutes -= cut
+                _retime(plan)
 
 
 def _timing_notes(plan: LessonPlan) -> list[str]:
     notes = []
     window = f"{plan.work_min}–{plan.work_max} productive min of a {plan.period}-min block"
-    if plan.total > plan.work_max:
-        need = plan.total - plan.work_max
-        notes.append(f"Planned time is {plan.total} min: {need} min over the {window}. Cut at least {need} min:")
-        options = []
-        warm = next((s for s in plan.segments if s.label.lower().startswith("warm")), None)
-        if warm and warm.minutes > 5:
-            options.append(("Trim the warm-up to 5 min", warm.minutes - 5))
-        cooldown = next((s for s in plan.segments if s.label == "Cool-down"), None)
-        if cooldown:
-            options.append(("Give the cool-down at the start of the next class", cooldown.minutes))
-        saved = 0
-        for text, minutes in options:
-            saved += minutes
-            notes.append(f"{text} (saves {minutes}; {saved} total).")
-        if saved < need:
-            notes.append(f"Still {need - saved} min over: split the lesson across two days.")
-    elif plan.total < plan.work_min:
-        short = plan.work_min - plan.total
-        notes.append(f"Planned time is {plan.total} min: {short} min under the {window}. Add at least {short} min:")
-        if any(s.label == "Lesson Synthesis" for s in plan.segments):
-            notes.append("Extend the lesson synthesis to 10 min (IM range 5–10; adds 5).")
-        if any(s.extension for s in plan.segments):
-            notes.append("Use the “Are you ready for more?” extensions.")
-        notes.append("Start the practice problems in class.")
-    else:
+    if plan.work_min <= plan.total <= plan.work_max:
         notes.append(
             f"Planned time is {plan.total} min: within the {window}, "
             f"leaving {plan.period - plan.total} min for entry, transitions, and dismissal."
         )
+    else:
+        notes.append(f"Planned time is {plan.total} min: could not be fit to the {window}.")
+    notes += [f"{s.label}: {s.adjustment}" for s in plan.segments if s.adjustment]
     for seg in (s for s in plan.segments if s.optional):
         with_it = plan.total + seg.minutes
         notes.append(

@@ -133,19 +133,28 @@ class TestPlan(unittest.TestCase):
         self.assertEqual(synth.questions, ["What are the three moves called?"])
 
     def test_within_productive_window(self):
-        # Fixture totals 45 min; default is a 50-min block with 40-48 productive.
+        # Fixture totals 45 min; default is a 50-min block with 40-50 productive.
         notes = make_plan().timing_notes
-        self.assertIn("within the 40–48 productive min of a 50-min block", notes[0])
+        self.assertIn("within the 40–50 productive min of a 50-min block", notes[0])
         self.assertIn("leaving 5 min", notes[0])
 
-    def test_over_productive_window(self):
-        notes = make_plan(work_max=42).timing_notes
-        self.assertIn("3 min over", notes[0])
-        self.assertIn("Trim the warm-up to 5 min (saves 5; 5 total).", notes)
+    def test_over_window_is_shortened_to_fit(self):
+        p = make_plan(work_max=42)
+        self.assertEqual(p.total, 42)
+        warm = p.segments[0]
+        self.assertEqual(warm.minutes, 7)
+        self.assertEqual(warm.adjustment, "Shortened from 10 to 7 min to fit the block.")
+        self.assertEqual([(s.start, s.end) for s in p.segments], [(0, 7), (7, 32), (32, 37), (37, 42)])
 
-    def test_under_productive_window(self):
-        notes = make_plan(work_min=48, work_max=50).timing_notes
-        self.assertIn("3 min under", notes[0])
+    def test_under_window_lengthens_synthesis_then_adds_practice(self):
+        p = make_plan(work_min=48, work_max=50)
+        self.assertEqual(p.total, 48)
+        synth = next(s for s in p.segments if s.label == "Lesson Synthesis")
+        self.assertEqual(synth.minutes, 8)
+        p = make_plan(period=60, work_min=55, work_max=60)  # synthesis to 10, then 5 practice
+        self.assertEqual(p.total, 55)
+        self.assertEqual((p.segments[-2].label, p.segments[-2].minutes), ("Practice Problems", 5))
+        self.assertEqual(p.segments[-1].label, "Cool-down")
 
     def test_optional_activity_is_off_the_clock(self):
         html = LESSON_HTML.replace(
@@ -158,7 +167,7 @@ class TestPlan(unittest.TestCase):
         p = plan.build(lesson, parse.parse_preparation(PREP_HTML), ref=courses.parse_ref("8.1.2"),
                        unit_title="", source_path="/x")
         self.assertEqual(p.total, 40)  # 10 + 25 + 5 cool-down; optional 10 excluded
-        self.assertIn("Optional Activity 2.3 (10 min) is not in the total: does not fit", p.timing_notes[-2])
+        self.assertIn("Optional Activity 2.3 (10 min) is not in the total: fits if time allows (50 min with it).", p.timing_notes[-2])
         self.assertIn("| if time (10 min) | Activity 2.3 (optional) |", render.markdown(p))
 
     def test_renderers(self):
